@@ -6,9 +6,9 @@ import java.io.IOException;
 
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.Writable;
-import org.apache.hadoop.mapreduce.InputSplit;
+import org.apache.hadoop.mapred.InputSplit;
 
-public class KafkaInputSplit extends InputSplit implements Writable {
+public class KafkaInputSplit implements InputSplit, Writable {
 
     private String brokerId;
     private String broker;
@@ -43,13 +43,13 @@ public class KafkaInputSplit extends InputSplit implements Writable {
     }
 
     @Override
-    public long getLength() throws IOException, InterruptedException {
+    public long getLength() throws IOException {
         return Long.MAX_VALUE;
     }
 
     @Override
-    public String[] getLocations() throws IOException, InterruptedException {
-        return new String[] {broker};
+    public String[] getLocations() throws IOException {
+        return new String[] {getBrokerHost()};
     }
 
     public String getBrokerId() {

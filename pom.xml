@@ -9,9 +9,9 @@
 
   <dependencies>
     <dependency>
-        <groupId>org.apache.kafka</groupId>
-        <artifactId>kafka-core</artifactId>
-        <version>0.7.3-1</version>
+        <groupId>org.clojars.smallrivers</groupId>
+        <artifactId>kafka</artifactId>
+        <version>0.7.1-SNAPSHOT</version>
     </dependency> 
     <dependency>
         <groupId>org.apache.hadoop</groupId>
@@ -48,17 +48,8 @@
 
   <repositories>
     <repository>
-        <id>gridport-snapshots</id>
-        <name>GridPort Snapshots</name>
-        <url>http://maven.gridport.co/content/repositories/snapshots</url>
-        <snapshots>
-            <updatePolicy>always</updatePolicy>
-        </snapshots>
-    </repository>
-    <repository>
-        <id>gridport-releases</id>
-        <name>GridPort Releases</name>
-        <url>http://maven.gridport.co/content/repositories/releases</url>
+        <id>clojars.org</id>
+  		<url>http://clojars.org/repo</url>
     </repository>
     <repository>
         <id>cloudera</id>

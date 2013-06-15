@@ -13,13 +13,14 @@ import kafka.message.MessageAndOffset;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.io.BytesWritable;
 import org.apache.hadoop.io.LongWritable;
-import org.apache.hadoop.mapreduce.InputSplit;
-import org.apache.hadoop.mapreduce.RecordReader;
+import org.apache.hadoop.mapred.InputSplit;
+import org.apache.hadoop.mapred.JobConf;
+import org.apache.hadoop.mapred.RecordReader;
 import org.apache.hadoop.mapreduce.TaskAttemptContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class KafkaInputRecordReader extends RecordReader<LongWritable, BytesWritable> {
+public class KafkaInputRecordReader implements RecordReader<LongWritable, BytesWritable> {
 
     static Logger log = LoggerFactory.getLogger(KafkaInputRecordReader.class);
 
@@ -37,22 +38,16 @@ public class KafkaInputRecordReader extends RecordReader<LongWritable, BytesWrit
     private long earliestOffset;
     private long watermark;
     private long latestOffset;
-
+    
     private ByteBufferMessageSet messages;
     private Iterator<MessageAndOffset> iterator;
-    private LongWritable key;
-    private BytesWritable value;
-
+    
     private long numProcessedMessages = 0L;
-
-    @Override
-    public void initialize(InputSplit split, TaskAttemptContext context) throws IOException, InterruptedException
+    
+    public KafkaInputRecordReader(InputSplit split, JobConf conf)
     {
-        initialize(split, context.getConfiguration());
-    }
-
-    public void initialize(InputSplit split, Configuration conf) throws IOException, InterruptedException
-    {
+    	log.info("Instantiating RecordReader {}", split);
+    	
         this.conf = conf;
         this.split = (KafkaInputSplit) split;
         topic = this.split.getTopic();
@@ -85,71 +80,7 @@ public class KafkaInputRecordReader extends RecordReader<LongWritable, BytesWrit
     }
 
     @Override
-    public boolean nextKeyValue() throws IOException, InterruptedException
-    {
-        if (key == null) {
-            key = new LongWritable();
-        }
-        if (value == null) {
-            value = new BytesWritable();
-        }
-
-        if (messages == null) {
-            FetchRequest request = new FetchRequest(topic, partition, watermark, fetchSize);
-            log.info("{} fetching offset {} ", topic+":" + split.getBrokerId() +":" + partition, watermark);
-            messages = consumer.fetch(request);
-            if (messages.getErrorCode() == ErrorMapping.OffsetOutOfRangeCode())
-            {
-                log.info("Out of bounds = " + watermark);
-                return false;
-            }
-            if (messages.getErrorCode() != 0)
-            {
-                log.warn("Messages fetch error code: " + messages.getErrorCode());
-                return false;
-            } else {
-                iterator = messages.iterator();
-                watermark += messages.validBytes();
-                if (!iterator.hasNext())
-                {
-                    //log.info("No more messages");
-                    return false;
-                }
-            }
-        }
-
-        if (iterator.hasNext())
-        {
-            MessageAndOffset messageOffset = iterator.next();
-            Message message = messageOffset.message();
-            key.set(watermark - message.size() - 4);
-            value.set(message.payload().array(), message.payload().arrayOffset(), message.payloadSize());
-            numProcessedMessages++;
-            if (!iterator.hasNext())
-            {
-                messages = null;
-                iterator = null;
-            }
-            return true;
-        }
-        log.warn("Unexpected iterator end.");
-        return false;
-    }
-
-    @Override
-    public LongWritable getCurrentKey() throws IOException, InterruptedException
-    {
-        return key;
-    }
-
-    @Override
-    public BytesWritable getCurrentValue() throws IOException, InterruptedException
-    {
-        return value;
-    }
-
-    @Override
-    public float getProgress() throws IOException, InterruptedException 
+    public float getProgress() throws IOException 
     {
         if (watermark >= latestOffset || earliestOffset == latestOffset) {
             return 1.0f;
@@ -198,5 +129,68 @@ public class KafkaInputRecordReader extends RecordReader<LongWritable, BytesWrit
         log.info("{} resetting offset to {}", topic+":" + split.getBrokerId() +":" + partition, offset);
         watermark = earliestOffset = offset;
     }
+
+	@Override
+	public boolean next(LongWritable key, BytesWritable value)
+			throws IOException {
+		log.info("next after key: {}, value: {}", key, value);
+		
+		if (messages == null) {
+            FetchRequest request = new FetchRequest(topic, partition, watermark, fetchSize);
+            log.info("{} fetching offset {} ", topic+":" + split.getBrokerId() +":" + partition, watermark);
+            messages = consumer.fetch(request);
+            if (messages.getErrorCode() == ErrorMapping.OffsetOutOfRangeCode())
+            {
+                log.info("Out of bounds = " + watermark);
+                return false;
+            }
+            if (messages.getErrorCode() != 0)
+            {
+                log.warn("Messages fetch error code: " + messages.getErrorCode());
+                return false;
+            } else {
+                iterator = messages.iterator();
+                watermark += messages.validBytes();
+                if (!iterator.hasNext())
+                {
+                    //log.info("No more messages");
+                    return false;
+                }
+            }
+        }
+
+        if (iterator.hasNext())
+        {
+            MessageAndOffset messageOffset = iterator.next();
+            Message message = messageOffset.message();
+            key.set(watermark - message.size() - 4);
+            value.set(message.payload().array(), message.payload().arrayOffset(), message.payloadSize());
+            
+            numProcessedMessages++;
+            if (!iterator.hasNext())
+            {
+                messages = null;
+                iterator = null;
+            }
+            return true;
+        }
+        log.warn("Unexpected iterator end.");
+        return false;
+	}
+
+	@Override
+	public LongWritable createKey() {
+		return new LongWritable();
+	}
+
+	@Override
+	public BytesWritable createValue() {
+		return new BytesWritable();
+	}
+
+	@Override
+	public long getPos() throws IOException {
+		return Math.min(Math.max(watermark, earliestOffset), latestOffset);
+	}
 
 }
